@@ -67,6 +67,15 @@
                     context: 'Refuses to use the new online triage system. Believes that as a "taxpayer" he shouldn’t have to "do the work" for the staff.',
                     initialTrigger: "I'm not filling in a bloody online form. I pay my taxes for this service. I want to speak to a human being and get an appointment now. Why are you making it so difficult?",
                     baseMood: "superior"
+                },
+                {
+                    id: 'third-party',
+                    title: 'The Third-Party Caller',
+                    type: 'Confidentiality / Disclosure',
+                    patientName: 'Sarah (Daughter)',
+                    context: 'Calling about her elderly father. Demanding to know his test results immediately. She is using threats of escalation to bypass consent rules.',
+                    initialTrigger: "I'm calling about my father, Arthur. I need his blood results now. I don't care about 'data protection'—I'm his daughter and I'll be taking this to the CQC if you don't tell me what's going on!",
+                    baseMood: "aggressive"
                 }
             ];
 
@@ -91,7 +100,6 @@
                     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
                 }, [messages, isTyping]);
 
-                // Initialise Voices
                 useEffect(() => {
                     const loadVoices = () => {
                         const voices = window.speechSynthesis.getVoices();
@@ -104,7 +112,6 @@
                 const speak = (text) => {
                     window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(text);
-                    // Find UK voice
                     const ukVoice = availableVoices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male')) 
                                   || availableVoices.find(v => v.lang === 'en-GB')
                                   || availableVoices.find(v => v.lang.startsWith('en'));
@@ -124,7 +131,6 @@
                     });
                     
                     if (!response.ok) {
-                        // If standard flash fails, try flash-latest (common fix for "model not found")
                         if (response.status === 404 && modelName === "gemini-1.5-flash") {
                             return callGemini(payload, "gemini-1.5-flash-latest");
                         }
@@ -223,13 +229,13 @@
                     <div className="min-h-screen p-8 flex flex-col items-center justify-center bg-slate-50 text-center">
                         <h2 className="text-4xl font-black text-slate-800 mb-2 tracking-tighter uppercase">Select Scenario</h2>
                         <p className="text-slate-500 mb-8 max-w-md italic">Practice management of Challenging, Manipulative, and Entitled behaviors.</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full text-left">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl w-full text-left">
                             {SCENARIOS.map(s => (
-                                <button key={s.id} onClick={() => { setActiveScenario(s); setStep('sim'); }} className="bg-white p-8 rounded-[40px] shadow hover:shadow-2xl border-2 border-transparent hover:border-[#005EB8] transition-all group">
+                                <button key={s.id} onClick={() => { setActiveScenario(s); setStep('sim'); }} className="bg-white p-6 rounded-[40px] shadow hover:shadow-2xl border-2 border-transparent hover:border-[#005EB8] transition-all group flex flex-col">
                                     <span className="text-[10px] font-black uppercase nhs-text bg-blue-50 px-2 py-1 rounded mb-4 inline-block tracking-widest">{s.type}</span>
-                                    <h3 className="text-xl font-bold mb-2 text-slate-800 group-hover:nhs-text">{s.patientName}</h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">{s.context}</p>
-                                    <div className="mt-4 flex items-center gap-2 nhs-text font-bold text-[10px] opacity-0 group-hover:opacity-100">START CASE <Icon name="arrow-right" size={12}/></div>
+                                    <h3 className="text-lg font-bold mb-2 text-slate-800 group-hover:nhs-text">{s.patientName}</h3>
+                                    <p className="text-xs text-slate-500 leading-relaxed line-clamp-3 mb-4">{s.context}</p>
+                                    <div className="mt-auto flex items-center gap-2 nhs-text font-bold text-[10px] opacity-0 group-hover:opacity-100">START CASE <Icon name="arrow-right" size={12}/></div>
                                 </button>
                             ))}
                         </div>
