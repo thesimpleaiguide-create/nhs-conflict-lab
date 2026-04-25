@@ -30,12 +30,11 @@
         (function() {
             const { useState, useEffect, useRef } = React;
             
-            // Standard Icon Component using FontAwesome
             const Icon = ({ name, size = 20, className = "", spin = false }) => (
                 <i className={`fa-solid fa-${name} ${spin ? 'fa-spin' : ''} ${className}`} style={{ fontSize: size }}></i>
             );
 
-            // API Key integrated for beta/stakeholder testing
+            // API Key integrated
             const apiKey = "AIzaSyD0ihaE53aT1d81aQPzkk05-Xz23c0R2uc"; 
             const appId = "nhs-elite-lab-live";
 
@@ -127,6 +126,7 @@
                 const [mentorFeedback, setMentorFeedback] = useState("Greet the person using the 4-Part Contact Structure.");
                 const [isGeneratingImage, setIsGeneratingImage] = useState(false);
                 const [documentation, setDocumentation] = useState("");
+                const [errorLog, setErrorLog] = useState(null);
 
                 const scrollRef = useRef(null);
                 const audioRef = useRef(null);
@@ -146,7 +146,8 @@
 
                         const voicePrompt = `${activeScenario.patientName}: (${moodInstruction}) ${text}`;
 
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`, {
+                        // Using standard multimodal endpoints
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -182,7 +183,8 @@
                         
                         const prompt = `Hyper-realistic portrait of ${activeScenario.imagePrompt}. Mood is ${mood}. Cinematic lighting, UK NHS GP surgery background.`;
                         
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`, {
+                        // Using Imagen stable endpoint
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1 } })
@@ -199,6 +201,7 @@
                 const processResponse = async (userMsg) => {
                     if (!userMsg.trim()) return;
                     setIsTyping(true);
+                    setErrorLog(null);
                     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
                     setUserInput('');
 
@@ -214,19 +217,25 @@
                         
                         JSON: { "patientReply", "agitationDelta", "tacticDetected", "currentPhase", "mentorFeedback", "rungLevel", "docEntry" }`;
 
-                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        // CHANGED: Using gemini-1.5-flash for maximum compatibility with AI Studio keys
+                        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                contents: [{ parts: [{ text: `User: "${userMsg}". Agitation: ${agitation}. Phase: ${contactPhase}.` }] }],
+                                contents: [{ parts: [{ text: `User: "${userMsg}". Agitation: ${agitation}.` }] }],
                                 systemInstruction: { parts: [{ text: systemPrompt }] },
                                 generationConfig: { responseMimeType: "application/json" }
                             })
                         });
                         
+                        if (!response.ok) {
+                            const errData = await response.json();
+                            throw new Error(errData.error?.message || "Google API returned an error.");
+                        }
+
                         const result = await response.json();
                         const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (!rawText) throw new Error("Empty response");
+                        if (!rawText) throw new Error("AI returned an empty response.");
                         const parsed = JSON.parse(rawText);
 
                         const newAgit = Math.min(100, Math.max(0, agitation + (parsed.agitationDelta || 0)));
@@ -245,8 +254,21 @@
                             generatePatientFace(newAgit);
                         }
                     } catch (e) {
-                        setMessages(prev => [...prev, { role: 'ai', text: "Error connecting to AI advisor." }]);
+                        console.error("AI Error:", e);
+                        setErrorLog(e.message);
                     } finally { setIsTyping(false); }
+                };
+
+                const handleReset = () => {
+                    setMessages([]);
+                    setAgitation(60);
+                    setContactPhase('Opening');
+                    setBoundaryRung(1);
+                    setDetectedTactic(null);
+                    setPatientImage(null);
+                    setDocumentation("");
+                    setErrorLog(null);
+                    setStep('picker');
                 };
 
                 if (step === 'intro') return (
@@ -313,12 +335,24 @@
 
                         <div className="flex-1 flex gap-4 overflow-hidden">
                             <div className="flex-1 bg-white rounded-3xl shadow-xl flex flex-col overflow-hidden relative border border-slate-200">
-                                {(isTyping || isGeneratingImage) && (
+                                {isTyping && (
                                     <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-50 flex flex-col items-center justify-center font-black nhs-text text-lg text-center p-8">
                                         <Icon name="spinner" spin={true} size={40} className="mb-4" />
                                         ANALYSING INTERACTION...
                                     </div>
                                 )}
+                                
+                                {errorLog && (
+                                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[60] bg-red-50 border-2 border-red-200 p-4 rounded-2xl shadow-2xl max-w-md">
+                                        <div className="flex items-center gap-2 text-red-600 font-bold mb-2">
+                                            <Icon name="circle-exclamation" />
+                                            Connection Error
+                                        </div>
+                                        <p className="text-xs text-red-700 font-mono bg-white p-2 rounded border border-red-100">{errorLog}</p>
+                                        <button onClick={() => setErrorLog(null)} className="mt-3 w-full bg-red-600 text-white py-2 rounded-xl text-xs font-bold">DISMISS</button>
+                                    </div>
+                                )}
+
                                 <div className="nhs-blue p-4 text-white font-bold flex justify-between items-center shadow-lg">
                                     <span className="text-xs tracking-widest uppercase font-black">NHS GP LIVE LAB: {activeScenario.title}</span>
                                     {detectedTactic && <span className="bg-red-600 px-3 py-1 rounded-full text-[10px] animate-pulse border border-white/30 uppercase">TACTIC: {detectedTactic}</span>}
@@ -358,7 +392,7 @@
                                         </div>
                                         <div className="p-6 border-t bg-slate-50 flex gap-3">
                                             <textarea value={userInput} onChange={e => setUserInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), processResponse(userInput))} className="flex-1 p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-[#005EB8] outline-none text-sm min-h-[80px] shadow-sm resize-none" placeholder="Type your response... (Use Miller's Law and 4-Part Structure)" />
-                                            <button onClick={() => processResponse(userInput)} disabled={isTyping} className="nhs-blue text-white px-8 rounded-2xl font-black shadow-xl hover:bg-[#003f7a] transition-all flex items-center justify-center"><Icon name="paper-plane" size={20}/></button>
+                                            <button onClick={() => processResponse(userInput)} disabled={isTyping} className="nhs-blue text-white px-8 rounded-2xl font-black shadow-xl hover:bg-[#003f7a] transition-all flex items-center justify-center min-w-[80px]"><Icon name="paper-plane" size={20}/></button>
                                         </div>
                                     </div>
                                 </div>
